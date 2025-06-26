@@ -3,7 +3,7 @@
   command = "npm install"
   
   # Directory where build artifacts are stored
-  publish = "."
+  publish = "public" # Changed from "." to "public"
   
   # Functions directory
   functions = "netlify/functions"
