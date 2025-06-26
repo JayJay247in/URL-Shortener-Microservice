@@ -1,94 +1,160 @@
-// functions/shorturl.js
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
-const mongoose = require('mongoose');
-const dns = require('dns');
-const UrlModel = require('../models/urlModel'); // Adjust path
+const dns = require('dns').promises;
+const url = require('url');
 
-// Database connection (needs careful handling in serverless)
-let conn = null;
-const MONGODB_URI = process.env.MONGODB_URI;
+// In-memory storage (in production, use a database like MongoDB or PostgreSQL)
+let urlDatabase = [];
+let currentId = 1;
 
-const connectDB = async () => {
-  if (conn == null) {
-    conn = mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000 // Short timeout for serverless
-    }).then(() => mongoose);
-    await conn; // Wait for connection to establish
+// Utility function to validate URL format
+function isValidUrl(urlString) {
+  try {
+    const urlObj = new URL(urlString);
+    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+  } catch (e) {
+    return false;
   }
-  return conn;
-};
-
-// Helper to get next sequence (simplified)
-async function getNextSequenceValue() {
-  const lastUrl = await UrlModel.findOne().sort({ short_url: -1 });
-  return lastUrl ? lastUrl.short_url + 1 : 1;
 }
 
 exports.handler = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false; // Important for Mongoose
-  await connectDB();
+  // Set CORS headers
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Content-Type': 'application/json'
+  };
 
-  const pathParts = event.path.split('/').filter(part => part); // e.g., ['api', 'shorturl', '1'] or ['api', 'shorturl']
-  const isShortIdRequest = pathParts.length === 3 && pathParts[1] === 'shorturl' && /^\d+$/.test(pathParts[2]);
+  // Handle preflight OPTIONS request
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers,
+      body: ''
+    };
+  }
 
-  if (event.httpMethod === 'POST' && pathParts.length === 2 && pathParts[1] === 'shorturl') {
-    const body = JSON.parse(event.body || '{}'); // Assuming JSON body for Netlify functions, or parse form data
-    const originalUrl = body.url;
-
-    if (!originalUrl || !/^(http|https):\/\//i.test(originalUrl)) {
-      return { statusCode: 200, body: JSON.stringify({ error: 'invalid url' }) }; // FCC expects 200 for this error
-    }
-
-    try {
-      const parsedUrl = new URL(originalUrl);
+  const path = event.path.replace('/.netlify/functions/shorturl', '');
+  
+  try {
+    // POST /api/shorturl - Create short URL
+    if (event.httpMethod === 'POST' && path === '') {
+      let originalUrl;
+      
+      // Parse body based on content type
+      if (event.headers['content-type']?.includes('application/json')) {
+        const body = JSON.parse(event.body);
+        originalUrl = body.url;
+      } else {
+        // Handle form-encoded data
+        const params = new URLSearchParams(event.body);
+        originalUrl = params.get('url');
+      }
+      
+      // Check if URL format is valid
+      if (!isValidUrl(originalUrl)) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ error: 'invalid url' })
+        };
+      }
+      
+      // Parse the URL to get hostname
+      const parsedUrl = url.parse(originalUrl);
       const hostname = parsedUrl.hostname;
-
-      return new Promise((resolve) => {
-        dns.lookup(hostname, async (err) => {
-          if (err) {
-            resolve({ statusCode: 200, body: JSON.stringify({ error: 'invalid url' }) });
-            return;
-          }
-          try {
-            let urlEntry = await UrlModel.findOne({ original_url: originalUrl });
-            if (urlEntry) {
-              resolve({ statusCode: 200, body: JSON.stringify({ original_url: urlEntry.original_url, short_url: urlEntry.short_url }) });
-            } else {
-              const shortUrlId = await getNextSequenceValue();
-              urlEntry = new UrlModel({ original_url: originalUrl, short_url: shortUrlId });
-              await urlEntry.save();
-              resolve({ statusCode: 200, body: JSON.stringify({ original_url: urlEntry.original_url, short_url: urlEntry.short_url }) });
-            }
-          } catch (dbErr) {
-            resolve({ statusCode: 500, body: JSON.stringify({ error: 'Database error' }) });
-          }
-        });
-      });
-    } catch (urlParseError) {
-      return { statusCode: 200, body: JSON.stringify({ error: 'invalid url' }) };
+      
+      try {
+        // Use dns.lookup to verify the URL exists
+        await dns.lookup(hostname);
+        
+        // Check if URL already exists in database
+        const existingUrl = urlDatabase.find(item => item.original_url === originalUrl);
+        
+        if (existingUrl) {
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              original_url: existingUrl.original_url,
+              short_url: existingUrl.short_url
+            })
+          };
+        }
+        
+        // Create new short URL entry
+        const shortUrl = currentId++;
+        const urlEntry = {
+          original_url: originalUrl,
+          short_url: shortUrl
+        };
+        
+        urlDatabase.push(urlEntry);
+        
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            original_url: originalUrl,
+            short_url: shortUrl
+          })
+        };
+        
+      } catch (dnsError) {
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ error: 'invalid url' })
+        };
+      }
     }
-  } else if (event.httpMethod === 'GET' && isShortIdRequest) {
-    const shortId = parseInt(pathParts[2]);
-    try {
-      const urlEntry = await UrlModel.findOne({ short_url: shortId });
+    
+    // GET /api/shorturl/:short_url - Redirect to original URL
+    if (event.httpMethod === 'GET' && path.startsWith('/')) {
+      const shortUrlParam = path.substring(1); // Remove leading slash
+      const shortUrl = parseInt(shortUrlParam);
+      
+      if (isNaN(shortUrl)) {
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'Invalid short URL format' })
+        };
+      }
+      
+      // Find the URL entry in database
+      const urlEntry = urlDatabase.find(item => item.short_url === shortUrl);
+      
       if (urlEntry) {
         return {
-          statusCode: 302, // Temporary redirect
+          statusCode: 302,
           headers: {
-            Location: urlEntry.original_url,
+            ...headers,
+            'Location': urlEntry.original_url
           },
           body: ''
         };
       } else {
-        return { statusCode: 404, body: JSON.stringify({ error: 'No short URL found' }) };
+        return {
+          statusCode: 404,
+          headers,
+          body: JSON.stringify({ error: 'No short URL found for the given input' })
+        };
       }
-    } catch (dbErr) {
-      return { statusCode: 500, body: JSON.stringify({ error: 'Database error' }) };
     }
+    
+    // Route not found
+    return {
+      statusCode: 404,
+      headers,
+      body: JSON.stringify({ error: 'Route not found' })
+    };
+    
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: 'Internal server error' })
+    };
   }
-
-  return {
-    statusCode: 404,
-    body: 'Not Found'
-  };
 };
