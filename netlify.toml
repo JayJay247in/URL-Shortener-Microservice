@@ -1,9 +1,9 @@
 [build]
-  # Build command (not needed for serverless functions)
+  # Build command
   command = "npm install"
   
   # Directory where build artifacts are stored
-  publish = "public"
+  publish = "."
   
   # Functions directory
   functions = "netlify/functions"
@@ -11,13 +11,18 @@
 [build.environment]
   NODE_VERSION = "18"
 
-# Redirect all API routes to serverless functions
+# Redirect API routes to serverless functions
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/api/shorturl/*"
+  to = "/.netlify/functions/shorturl/:splat"
   status = 200
 
-# Serve the main page
+[[redirects]]
+  from = "/api/shorturl"
+  to = "/.netlify/functions/shorturl"
+  status = 200
+
+# Handle all other routes
 [[redirects]]
   from = "/*"
   to = "/index.html"
