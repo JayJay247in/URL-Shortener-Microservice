@@ -1,0 +1,105 @@
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 700px;
+    margin: 30px auto;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.url-form {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 30px;
+}
+
+.url-form label {
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.url-form input[type="text"] {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 1em;
+}
+
+.url-form input[type="submit"] {
+    padding: 10px 15px;
+    background-color: #5cb85c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.url-form input[type="submit"]:hover {
+    background-color: #4cae4c;
+}
+
+.example-usage {
+    background-color: #e9ecef;
+    padding: 15px;
+    border-radius: 4px;
+    border: 1px solid #ced4da;
+}
+
+.example-usage h2 {
+    margin-top: 0;
+    color: #495057;
+}
+
+.example-usage code {
+    background-color: #f8f9fa;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.example-usage pre code {
+    display: block;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+.example-usage p a {
+    color: #007bff;
+    text-decoration: none;
+}
+.example-usage p a:hover {
+    text-decoration: underline;
+}
+
+footer {
+    text-align: center;
+    margin-top: auto; /* Pushes footer to the bottom */
+    padding: 20px;
+    color: #777;
+}
+footer a {
+    color: #007bff;
+    text-decoration: none;
+}
