@@ -1,26 +1,24 @@
 # Netlify configuration
 
 [build]
-  # This command is run when you deploy
   command = "npm install"
-  # The directory where your serverless functions are
   functions = "netlify/functions"
-  # The directory with your static files (like index.html)
   publish = "public"
 
 [build.environment]
   NODE_VERSION = "18"
 
-# Redirect rules to make your function work correctly
-[[redirects]]
-  # This rule handles POST requests to /api/shorturl
-  from = "/api/shorturl"
-  to = "/.netlify/functions/shorturl"
-  status = 200 # This makes it a "rewrite"
+# --- Redirect rules ---
+# It's best practice to list more specific rules first.
 
+# This rule handles GET requests for redirection, like /api/shorturl/1
 [[redirects]]
-  # This rule handles GET requests for redirection, like /api/shorturl/1
-  # It passes the entire path to your function.
   from = "/api/shorturl/*"
   to = "/.netlify/functions/shorturl"
-  status = 200 # This is a rewrite
+  status = 200
+
+# This rule handles POST requests to the base endpoint /api/shorturl
+[[redirects]]
+  from = "/api/shorturl"
+  to = "/.netlify/functions/shorturl"
+  status = 200
