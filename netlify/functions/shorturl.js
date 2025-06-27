@@ -1,118 +1,99 @@
-const express = require('express');
-const cors = require('cors');
 const dns = require('dns');
-const url = require('url');
+const { URL } = require('url');
 
-const app = express();
+// Simple in-memory storage. Resets on serverless function cold starts.
+const urlDatabase = [];
+let nextId = 1;
 
-// Basic Configuration
-const port = process.env.PORT || 3000;
+// Utility to parse the urlencoded form body from POST requests
+const parseBody = (body) => {
+  if (!body) return null;
+  const params = new URLSearchParams(body);
+  return params.get('url');
+};
 
-app.use(cors());
+exports.handler = async (event, context) => {
+  const commonHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
 
-// Middleware to parse URL-encoded and JSON bodies
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
-
-app.use('/public', express.static(`${process.cwd()}/public`));
-
-app.get('/', function(req, res) {
-  res.sendFile(process.cwd() + '/views/index.html');
-});
-
-// In-memory storage (resets on server restart)
-let urlDatabase = [];
-let currentId = 1;
-
-// Function to validate URL format
-function isValidUrlFormat(urlString) {
-  try {
-    const parsedUrl = new URL(urlString);
-    // Check if protocol is http or https
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
-  } catch (e) {
-    return false;
+  // Handle CORS preflight OPTIONS requests
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: commonHeaders, body: '' };
   }
-}
 
-// Function to verify URL exists using DNS lookup
-function verifyUrlExists(urlString, callback) {
-  try {
-    const parsedUrl = new URL(urlString);
-    const hostname = parsedUrl.hostname;
-    
-    dns.lookup(hostname, (err, address) => {
-      if (err) {
-        callback(false);
-      } else {
-        callback(true);
+  // --- GET /api/shorturl/<id> ---
+  // Handle redirection requests
+  if (event.httpMethod === 'GET') {
+    // Extract the last part of the path, e.g., "1" from "/api/shorturl/1"
+    const pathParts = event.path.split('/').filter(Boolean);
+    const shortUrlId = parseInt(pathParts[pathParts.length - 1], 10);
+
+    // Check if it's a valid number and find it in our "database"
+    if (!isNaN(shortUrlId)) {
+      const entry = urlDatabase.find(item => item.short_url === shortUrlId);
+      if (entry) {
+        // Success: redirect to the original URL
+        return {
+          statusCode: 302,
+          headers: { Location: entry.original_url },
+          body: '',
+        };
       }
-    });
-  } catch (e) {
-    callback(false);
-  }
-}
-
-// POST endpoint to create short URL
-app.post('/api/shorturl', function(req, res) {
-  const originalUrl = req.body.url;
-  
-  // Check if URL format is valid
-  if (!isValidUrlFormat(originalUrl)) {
-    return res.json({ error: 'invalid url' });
-  }
-  
-  // Verify URL exists using DNS lookup
-  verifyUrlExists(originalUrl, (exists) => {
-    if (!exists) {
-      return res.json({ error: 'invalid url' });
     }
-    
-    // Check if URL already exists in database
-    const existingUrl = urlDatabase.find(item => item.original_url === originalUrl);
-    if (existingUrl) {
-      return res.json({
-        original_url: existingUrl.original_url,
-        short_url: existingUrl.short_url
-      });
-    }
-    
-    // Create new short URL entry
-    const newUrlEntry = {
-      original_url: originalUrl,
-      short_url: currentId
+    // If not found, return an error
+    return {
+      statusCode: 404,
+      headers: { ...commonHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'No short URL found for the given input' }),
     };
-    
-    urlDatabase.push(newUrlEntry);
-    currentId++;
-    
-    res.json({
-      original_url: newUrlEntry.original_url,
-      short_url: newUrlEntry.short_url
-    });
-  });
-});
-
-// GET endpoint to redirect to original URL
-app.get('/api/shorturl/:short_url', function(req, res) {
-  const shortUrl = parseInt(req.params.short_url);
-  
-  // Check if short_url is a valid number
-  if (isNaN(shortUrl)) {
-    return res.json({ error: 'invalid url' });
   }
   
-  // Find the URL entry in database
-  const urlEntry = urlDatabase.find(item => item.short_url === shortUrl);
-  
-  if (!urlEntry) {
-    return res.json({ error: 'No short URL found for the given input' });
-  }
-  
-  // Redirect to original URL
-  res.redirect(urlEntry.original_url);
-});
+  // --- POST /api/shorturl ---
+  // Handle new URL submissions
+  if (event.httpMethod === 'POST') {
+    const originalUrl = parseBody(event.body);
+    const errorResponse = {
+      statusCode: 200, // freeCodeCamp tests check for status 200 on this error
+      headers: { ...commonHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'invalid url' }),
+    };
 
-app.listen(port, function() {
-  console.log(`Listening on port ${port}`);
-});
+    let urlObject;
+    try {
+      urlObject = new URL(originalUrl);
+      if (urlObject.protocol !== 'http:' && urlObject.protocol !== 'https:') {
+        throw new Error('Invalid protocol');
+      }
+    } catch (error) {
+      return errorResponse;
+    }
+
+    try {
+      await dns.promises.lookup(urlObject.hostname);
+      
+      const newEntry = {
+        original_url: originalUrl,
+        short_url: nextId++,
+      };
+      urlDatabase.push(newEntry);
+
+      return {
+        statusCode: 200,
+        headers: { ...commonHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEntry),
+      };
+    } catch (error) {
+      return errorResponse; // DNS lookup failed
+    }
+  }
+
+  // Fallback for unhandled methods
+  return {
+    statusCode: 405,
+    headers: commonHeaders,
+    body: 'Method Not Allowed',
+  };
+};
