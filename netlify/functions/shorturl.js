@@ -8,7 +8,6 @@ const { URL } = require('url');
 const MONGODB_URI = process.env.MONGODB_URI;
 
 // --- Database Connection Caching ---
-// Cache the database connection between function invocations for better performance.
 let cachedDb = null;
 async function connectToDatabase() {
   if (cachedDb) {
@@ -16,25 +15,20 @@ async function connectToDatabase() {
   }
   const client = new MongoClient(MONGODB_URI);
   await client.connect();
-  // IMPORTANT: Replace 'url_shortener_db' with the name of your database
   const db = client.db('url_shortener_db');
   cachedDb = db;
   return db;
 }
 
 // --- Counter for short_url ---
-// Gets the next sequential number for the short_url field
 async function getNextSequenceValue(db) {
-    // This finds the document with _id: "short_url_id" and increments its sequence_value by 1.
-    // It's an atomic operation, which prevents race conditions.
     const sequenceDocument = await db.collection('counters').findOneAndUpdate(
         { _id: 'short_url_id' },
         { $inc: { sequence_value: 1 } },
-        { returnDocument: 'after', upsert: true } // "upsert: true" creates the doc if it doesn't exist
+        { returnDocument: 'after', upsert: true }
     );
     return sequenceDocument.sequence_value;
 }
-
 
 // Utility to parse the urlencoded form body from POST requests
 const parseBody = (body) => {
@@ -54,6 +48,12 @@ exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: commonHeaders, body: '' };
   }
+  
+  // --- ADDED FOR DEBUGGING ---
+  console.log('--- Invoking function ---');
+  console.log('HTTP Method:', event.httpMethod);
+  console.log('Request Path:', event.path);
+  // --- END DEBUGGING ---
 
   try {
     const db = await connectToDatabase();
@@ -61,13 +61,25 @@ exports.handler = async (event, context) => {
     // --- GET /api/shorturl/<id> ---
     if (event.httpMethod === 'GET') {
       const pathParts = event.path.split('/').filter(Boolean);
-      const shortUrlId = parseInt(pathParts[pathParts.length - 1], 10);
+      const shortUrlParam = pathParts[pathParts.length - 1];
       
+      // --- ADDED FOR DEBUGGING ---
+      console.log('Handling GET request.');
+      console.log('Parsed path parts:', pathParts);
+      console.log('Extracted parameter from path:', shortUrlParam);
+      // --- END DEBUGGING ---
+
+      const shortUrlId = parseInt(shortUrlParam, 10);
+      
+      console.log('Parsed parameter as integer:', shortUrlId); // DEBUG
+
       if (!isNaN(shortUrlId)) {
-        // Find the URL by its numeric short_url in the database
+        console.log('Looking for short_url in DB:', shortUrlId); // DEBUG
         const urlDoc = await db.collection('urls').findOne({ short_url: shortUrlId });
+        console.log('Database query result (urlDoc):', urlDoc); // DEBUG
         
         if (urlDoc) {
+          console.log('SUCCESS: Found document. Redirecting to:', urlDoc.original_url); // DEBUG
           return {
             statusCode: 302, // 302 is a temporary redirect
             headers: { Location: urlDoc.original_url },
@@ -76,6 +88,7 @@ exports.handler = async (event, context) => {
         }
       }
       
+      console.log('FAILURE: No valid URL doc found for this ID.'); // DEBUG
       return {
         statusCode: 404,
         headers: { ...commonHeaders, 'Content-Type': 'application/json' },
@@ -85,9 +98,12 @@ exports.handler = async (event, context) => {
   
     // --- POST /api/shorturl ---
     if (event.httpMethod === 'POST') {
+        console.log('Handling POST request.'); // DEBUG
         const originalUrl = parseBody(event.body);
+        console.log('Parsed URL from body:', originalUrl); // DEBUG
+
         const errorResponse = {
-            statusCode: 200, // freeCodeCamp expects 200 on validation error
+            statusCode: 200, 
             headers: { ...commonHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify({ error: 'invalid url' }),
         };
@@ -97,18 +113,17 @@ exports.handler = async (event, context) => {
             if (urlObject.protocol !== 'http:' && urlObject.protocol !== 'https:') {
                 throw new Error('Invalid protocol');
             }
-            // Use promises-based dns lookup
             await dns.promises.lookup(urlObject.hostname);
         } catch (error) {
+            console.log('URL validation failed.'); // DEBUG
             return errorResponse;
         }
 
-        // Check if URL already exists in DB
         let urlDoc = await db.collection('urls').findOne({ original_url: originalUrl });
 
         if (urlDoc) {
-            // If it exists, return the existing entry
-             return {
+            console.log('URL found in DB. Returning existing entry.'); // DEBUG
+            return {
                 statusCode: 200,
                 headers: { ...commonHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -117,14 +132,15 @@ exports.handler = async (event, context) => {
                 }),
             };
         } else {
-            // If it doesn't exist, create a new one
+            console.log('URL not in DB. Creating new entry.'); // DEBUG
             const shortUrl = await getNextSequenceValue(db);
             const newEntry = {
                 original_url: originalUrl,
                 short_url: shortUrl,
             };
             await db.collection('urls').insertOne(newEntry);
-             return {
+            console.log('New entry created:', newEntry); // DEBUG
+            return {
                 statusCode: 200,
                 headers: { ...commonHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify(newEntry),
@@ -133,7 +149,7 @@ exports.handler = async (event, context) => {
     }
 
   } catch (error) {
-      console.error(error);
+      console.error('CRITICAL ERROR:', error);
       return {
         statusCode: 500,
         body: JSON.stringify({ message: 'Internal Server Error.' }),
