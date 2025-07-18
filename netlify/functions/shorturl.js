@@ -1,431 +1,177 @@
+// set up an express app
+const port = 3000;
 
-// init project
-require('dotenv').config();
+/** require dependencies
+ * express to handle routing
+ * dotenv to access .env variables locally
+ * dns to check the validity of the input URL
+ * body parser to properly retrieve the form's value
+ * mongodb and mongoose to handle the database logic
+ */
 const express = require('express');
-const bodyParser = require("body-parser");
-const mongoose = require("mongoose");
-const dns = require("dns");
-const urlparser = require("url");
-const multer = require("multer");
+require('dotenv').config();
+const dns = require('dns');
+const bodyParser = require('body-parser');
+const mongodb = require('mongodb');
+const mongoose = require('mongoose');
+
+// set up an express app
 const app = express();
-const port = process.env.PORT || 3000;
 
+// mount the body parser middleware
+app.use(bodyParser.urlencoded({ extended: false }));
 
+// render the stylesheet as found in the public folder
+app.use(express.static(`${__dirname}/public`));
 
-
-//Setup DB
-//mongoose.connect(process.env.DB_URI)
-//middle-ware
-
-app.use(bodyParser.urlencoded({ extended: true }));
-
-mongoose.connect(process.env.DB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-})
-
-
-// enable CORS (https://en.wikipedia.org/wiki/Cross-origin_resource_sharing)
-// so that your API is remotely testable by FCC 
-var cors = require('cors');
-//const shortid = require('shortid');
-const { json } = require('express');
-app.use(cors({ optionsSuccessStatus: 200 }));  // some legacy browsers choke on 204
-const upload = multer({ dest: "./public/data/uploads" })
-
-// http://expressjs.com/en/starter/static-files.html
-app.use(express.static('public'));
-
-// http://expressjs.com/en/starter/basic-routing.html
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + '/views/index.html');
+// MONGO && MONGOOSE
+// connect the application to the mLab database through the process variable detailing the URI code
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true
 });
 
-
-// your first API endpoint... 
-app.get("/api/hello", (req, res) => {
-  res.json({greeting: 'hello API'});
+// define a schema for the url(s) documents, to be stored and read in the database
+const { Schema } = mongoose;
+// each instance shall have two fields
+// a string representing the original URL
+// an integer for the shortened counterpart
+const urlSchema = new Schema({
+  original_url: {
+    type: String,
+    required: true
+  },
+  short_url: {
+    type: Number,
+    required: true,
+    default: 0
+  }
 });
 
+// define a model, on which all instances (documents) will be based
+const Url = mongoose.model('Url', urlSchema);
 
-//Timestamp HTML router
-
-app.get("/timestamp", (req, res) => {
-    res.sendFile(__dirname + '/views/timestamp.html');
+// EXPRESS && ROUTING
+// in the root path render the HTML file as found in the views folder
+app.get('/', (req, res) => {
+  res.sendFile(`${__dirname}/views/index.html`);
 });
 
-//Request Header parser router
+// following a post request in the selected path, create and save a document
+app.post('/api/shorturl', (req, res) => {
+  /** path's logic
+   * use the dns module to check if the input valid represents a valid url
+   *    valid
+   *    use the findOne() method to check if the database already contains a matching document
+   *        not found
+   *        use the estimatedDocumentCount() method to assess the number of items in the database
+   *        create a new entry, using the length to create a unique short_url value
+   *        save the entry
+   *        display pertinent information
+   *
+   *        found
+   *        display pertinent information
+   *
+   *    invalid
+   *    display an error message
+   */
 
-app.get("/requestHeaderParser", (req, res) => {
-    res.sendFile(__dirname + '/views/requestHeaderParser.html');
-});
+  // store in a variable the requested url
+  const urlRequest = req.body.url;
 
-//URL Shortner
+  // retrieve the hostname removing from the url (the section between https:// and relative paths)
+  const hostname = urlRequest
+    .replace(/http[s]?\:\/\//, '')
+    .replace(/\/(.+)?/, '');
 
-app.get("/urlShortenerMicroservice", (req, res) => {
-    res.sendFile(__dirname + '/views/urlShortenerMicroservice.html');
-});
-
-
-
-//Exercise Tracker
-app.get("/exerciseTracker", (req, res) => {
-    res.sendFile(__dirname + '/views/exerciseTracker.html');
-
-//File Metadata Microservice
-app.get("/fileMetadataMicroservice", (req, res) => {
-res.sendFile(__dirname + '/views/fileMetadataMicroservice.html');
-
-// Timestamp Project
-app.get("/api/timestamp", (req, res) => {
-    var now = new Date()
-    res.json({
-        "unix": now.getTime(),
-        "utc": now.toUTCString()
-    });
-});
-
-
-
-        app.get("/api/timestamp/:date_string", (req, res) => {
-            let dateString = req.params.date_string;
-
-
-
-            if (parseInt(dateString) > 10000) {
-                let unixTime = new Date(parseInt(dateString));
-                res.json({
-                    "unix": unixTime.getTime(),
-                    "utc": unixTime.toUTCString()
-                });
-            }
-
-
-
-            let passedInValue = new Date(dateString);
-
-            if (passedInValue == "Invalid Date") {
-                res.json({ "error": "Invalid Date" });
-            } else {
-                res.json({
-                    "unix": passedInValue.getTime(),
-                    "utc": passedInValue.toUTCString()
-                })
-            }
-        });
-
-        //whoami API
-
-        app.get("/api/whoami", (req, res) => {
-
-            res.json({
-                "ipaddress": req.connection.remoteAddress,
-                "language": req.headers["accept-language"],
-                "software": req.headers["user-agent"]
-            })
-        });
-
-        //URL Shortner
-        const schema = new mongoose.Schema({ url: 'string' });
-        const Url = mongoose.model('Url', schema);
-
-        app.post('/api/shorturl/', (req, res) => {
-            const bodyurl = req.body.url;
-
-            const something = dns.lookup(urlparser.parse(bodyurl).hostname, (err, address) => {
-                if (!address) {
-                    res.json({ error: "Invalid URL" })
-                } else {
-                    const url = new Url({ url: bodyurl })
-                    url.save((err, data) => {
-                        res.json({
-                            original_url: data.url,
-                            short_url: data.id
-                        })
-                    })
-                }
-            })
-        });
-
-        app.get("/api/shorturl/:id", (req, res) => {
-            const id = req.params.id;
-            Url.findById(id, (err, data) => {
-                if (!data) {
-                    res.json({ error: "Invalid URL" })
-                } else {
-
-                    res.redirect(data.url)
-                }
-            });
-        });
-    });
-
-
-    //Exercise tracker
-    const exerciseSchema = {
-        userId: { type: String, required: true },
-        description: String,
-        duration: Number,
-        date: { type: Date, default: Date.now }
+  // use the hostname in the lookup() function
+  dns.lookup(hostname, (lookupErr, addresses) => {
+    if (lookupErr) {
+      console.log('lookup() error');
     }
-
-    const userSchema = mongoose.Schema(
-        {
-            username: { type: String, required: true, unique: true },
-            exercices: [
-                {
-                    description: { type: String },
-                    duration: { type: Number },
-                    date: { type: String, required: false }
-                }
-            ]
+    // lookup() returns either _undefined_ or _an IP address_
+    // if undefined , send a JSON object detailing the invalid nature of the request
+    if (!addresses) {
+      res.json({
+        error: 'invalid URL'
+      });
+    } else {
+      // if an IP address is returned
+      // check if the database alread contains a matching document
+      Url.findOne({
+        original_url: urlRequest
+      }, (findOneErr, urlFound) => {
+        if (findOneErr) {
+          console.log('findOne() error');
         }
-    );
-    const User = mongoose.model('User', userSchema);
-    const Exercise = mongoose.model('Exercise', exerciseSchema)
-
-    const logSchema = new mongoose.Schema({
-        userId: String,
-        description: String,
-        duration: Number,
-        date: Date,
-    });
-
-    const Log = mongoose.model('Log', logSchema);
-
-    app.use(bodyParser.urlencoded({ extended: false }))
-    app.use(bodyParser.json())
-
-
-    app.post("/api/users", (req, res) => {
-        const newUser = new User({
-            username: req.body.username
-        });
-        newUser.save((err, data) => {
-            if (err) {
-                res.json("Username already taken")
-            } else {
-                res.json({ "username": data.username, "_id": data.id });
+        // findOne() returns either _null_ or _a document_
+        // depending on whether or not a document matches the specified property value pair(s)
+        // if null, create a new document
+        if (!urlFound) {
+          // check the number of documents in the database
+          Url.estimatedDocumentCount((countErr, count) => {
+            if (countErr) {
+              res.send('estimatedDocumentCount() error');
             }
-        })
-    })
-
-    app.get('/api/users', (req, res) => {
-        User.find({}, { __v: 0 }, (err, data) => {
-            if (err) {
-                res.json({ error: 'Unable to retrieve users' });
-            } else {
-                res.json(data);
-            }
-        });
-    });
-
-    app.post('/api/users/:_id/exercises', (req, res) => {
-        const userId = req.params._id;
-        const description = req.body.description;
-        const duration = req.body.duration;
-        if (!req.body.date) {
-            date = new Date();
-        } else {
-            date = new Date(req.body.date);
-        }
-        if (description == '' || duration == '') {
-            res.send('Please enter a description and duration');
-        } else {
-            User.findById(userId, (err, userData) => {
-                if (err) {
-                    res.json({ error: 'Unable to find user' });
-                } else {
-                    const newLog = new Log({
-                        userId: userId,
-                        description: description,
-                        duration: duration,
-                        date: date,
-                    });
-                    newLog.save((err, data) => {
-                        if (err) {
-                            console.log(err);
-                            res.json({ error: 'Unable to create log' });
-                        } else {
-                            res.json({
-                                username: userData.username,
-                                description: data.description,
-                                duration: data.duration,
-                                _id: data.userId,
-                                date: data.date.toDateString(),
-                            });
-                        }
-                    });
-                }
+            // create a new document
+            // for the short_url field increment the number of documents
+            const url = new Url({
+              original_url: urlRequest,
+              short_url: count + 1
             });
-        }
-    });
 
-    app.get('/api/users/:_id/logs', (req, res) => {
-        const userId = req.params._id;
-        const from = req.query.from;
-        const to = req.query.to;
-        const limit = req.query.limit;
-        User.findById(userId, (err, userData) => {
-            if (err) {
-                res.json({ error: 'Unable to find user' });
-            } else {
-                Log.find(
-                    { userId: userId },
-                    {
-                        _id: 0,
-                        __v: 0,
-                    },
-                    (err, data) => {
-                        if (err) {
-                            res.json({ error: 'Unable to find logs' });
-                        } else {
-                            if (from) {
-                                data = data.filter((log) => log.date >= new Date(from));
-                            }
-                            if (to) {
-                                data = data.filter((log) => log.date <= new Date(to));
-                            }
-                            if (limit) {
-                                data = data.slice(0, limit);
-                            }
+            // save the document in the database
+            url.save((saveErr, urlSaved) => {
+              if (saveErr) {
+                res.send('save() error');
+              }
+              // send a json object detailing the values of the saved url
+              res.json({
+                original_url: urlSaved.original_url,
+                short_url: urlSaved.short_url
+              });
+            // save block
+            });
+          // count block
+          });
+        // url not found block
+        } else {
+          // findOne() returns an object
+          // display its information
+          res.json({
+            original_url: urlFound.original_url,
+            short_url: urlFound.short_url
+          });
+        } // url found block
+      }); // findOne() block
+    } // vaid lookup block
+  }); // lookup/(block)
+}); // post request block
 
-                            let logArr = [];
-                            for (let i = 0; i < data.length; i++) {
-                                logArr.push({
-                                    description: data[i].description,
-                                    duration: data[i].duration,
-                                    date: new Date(data[i].date).toDateString().slice(0, 16),
-                                });
-                            }
-                            if (from && to) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    from: new Date(from).toDateString(),
-                                    to: new Date(to).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else if (from) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    from: new Date(from).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else if (to) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    to: new Date(to).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else {
-                                res.json({
-                                    _id: userId,
-                                    username: userData.username,
-                                    count: data.length,
-                                    log: [...logArr],
-                                });
-                            }
-                        }
-                    }
-                );
-            }
-        });
-    });
+// following a get request in the selected path, re-route the visitor toward the unshortened url
+app.get('/api/shorturl/:shorturl', (req, res) => {
+  // retrieve the requested short url through the request parameter
+  const { shorturl } = req.params;
 
-    app.get('/api/users/:_id/logs', (req, res) => {
-        const userId = req.params._id;
-        const from = req.query.from;
-        const to = req.query.to;
-        const limit = req.query.limit;
-        User.findById(userId, (err, userData) => {
-            if (err) {
-                res.json({ error: 'Unable to find user' });
-            } else {
-                Log.find(
-                    { userId: userId },
-                    {
-                        _id: 0,
-                        __v: 0,
-                    },
-                    (err, data) => {
-                        if (err) {
-                            res.json({ error: 'Unable to find logs' });
-                        } else {
-                            if (from) {
-                                data = data.filter((log) => log.date >= new Date(from));
-                            }
-                            if (to) {
-                                data = data.filter((log) => log.date <= new Date(to));
-                            }
-                            if (limit) {
-                                data = data.slice(0, limit);
-                            }
+  // lookf for a document in the database with the matching shorturl
+  Url.findOne({
+    short_url: shorturl
+  }, (err, urlFound) => {
+    if (err) {
+      console.log('findOne() error');
+    }
+    // once again, findOne() can either return _null_ or _an object_
+    // returns null, return a message relating the lack of shortened url
+    if (!urlFound) {
+      res.json({
+        error: 'no matching URL'
+      });
+    } else {
+      // returns a document matching the short url, forward toward the unshortened url
+      res.redirect(urlFound.original_url);
+    }
+  }); // findOne() block
+}); // get request block
 
-                            let logArr = [];
-                            for (let i = 0; i < data.length; i++) {
-                                logArr.push({
-                                    description: data[i].description,
-                                    duration: data[i].duration,
-                                    date: new Date(data[i].date).toDateString().slice(0, 16),
-                                });
-                            }
-                            if (from && to) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    from: new Date(from).toDateString(),
-                                    to: new Date(to).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else if (from) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    from: new Date(from).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else if (to) {
-                                res.json({
-                                    _id: userData._id,
-                                    username: userData.username,
-                                    to: new Date(to).toDateString(),
-                                    count: data.length,
-                                    log: logArr,
-                                });
-                            } else {
-                                res.json({
-                                    _id: userId,
-                                    username: userData.username,
-                                    count: data.length,
-                                    log: [...logArr],
-                                });
-                            }
-                        }
-                    }
-                );
-            }
-        });
-    });
-
-});
-    //File Metadata Microservice
-app.post("/api/fileanalyse", upload.single("upfile"), (req, res) => {
-    const { originalname, mimetype, size } = req.file;
-    res.json({
-        name: originalname,
-        type: mimetype,
-        size,
-    });
-});
-// listen for requests :)
-var listener = app.listen(port, () => {
-    console.log('Your app is listening on port' + listener.address().port);
-});
+// listen in the selected port and render the simple application
+app.listen(port);
+console.log(`listening on port ${port}`);
