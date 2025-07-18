@@ -1,388 +1,97 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>URL Shortener Microservice</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
+  <title>URL Shortener</title>
+  <meta name="description" content="Create the third back-end project for the _API and microservices_ certification @freecodecamp." />
 
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
+  <link rel="stylesheet" href="style.css" />
+  <!-- <link rel="icon" href="tab_icon.png"> -->
 
-        header {
-            text-align: center;
-            color: white;
-            margin-bottom: 40px;
-            padding: 40px 0;
-        }
-
-        header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-
-        main {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            overflow: hidden;
-        }
-
-        .form-section {
-            padding: 40px;
-            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-
-        .form-section h2 {
-            margin-bottom: 20px;
-            font-size: 1.8rem;
-        }
-
-        .input-group {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-
-        .url-input {
-            flex: 1;
-            padding: 15px;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            outline: none;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .url-input:focus {
-            box-shadow: 0 2px 15px rgba(0,0,0,0.2);
-            transform: translateY(-2px);
-            transition: all 0.3s ease;
-        }
-
-        .submit-btn, .copy-btn {
-            padding: 15px 25px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-
-        .submit-btn:hover, .copy-btn:hover {
-            background: #45a049;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        }
-
-        .submit-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .copy-btn {
-            background: #2196F3;
-            padding: 10px 15px;
-            font-size: 0.9rem;
-            margin-top: 10px;
-        }
-
-        .copy-btn:hover {
-            background: #1976D2;
-        }
-
-        .info-section, .api-section {
-            padding: 40px;
-        }
-
-        .info-section h3, .api-section h3 {
-            color: #333;
-            margin-bottom: 20px;
-            font-size: 1.5rem;
-        }
-
-        .info-section ol {
-            margin-left: 20px;
-        }
-
-        .info-section li {
-            margin-bottom: 10px;
-            font-size: 1.1rem;
-        }
-
-        .api-example {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            border-left: 4px solid #667eea;
-        }
-
-        .api-example h4 {
-            color: #667eea;
-            margin-bottom: 10px;
-        }
-
-        .api-example pre {
-            background: #2d3748;
-            color: #e2e8f0;
-            padding: 15px;
-            border-radius: 6px;
-            overflow-x: auto;
-            margin: 10px 0;
-        }
-
-        .api-example code {
-            font-family: 'Courier New', monospace;
-        }
-
-        .result {
-            margin: 20px 0;
-            padding: 20px;
-            border-radius: 8px;
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .success {
-            background: #d4edda;
-            border: 1px solid #c3e6cb;
-            color: #155724;
-            padding: 20px;
-            border-radius: 8px;
-        }
-
-        .error {
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            color: #721c24;
-            padding: 20px;
-            border-radius: 8px;
-        }
-
-        .success h4, .error h4 {
-            margin-bottom: 10px;
-        }
-
-        .success p, .error p {
-            margin-bottom: 10px;
-        }
-
-        .success a {
-            color: #0056b3;
-            text-decoration: none;
-            font-weight: bold;
-        }
-
-        .success a:hover {
-            text-decoration: underline;
-        }
-
-        footer {
-            text-align: center;
-            color: white;
-            margin-top: 40px;
-            padding: 20px 0;
-            opacity: 0.8;
-        }
-
-        /* Responsive design */
-        @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-            }
-            
-            header h1 {
-                font-size: 2rem;
-            }
-            
-            .input-group {
-                flex-direction: column;
-            }
-            
-            .form-section, .info-section, .api-section {
-                padding: 20px;
-            }
-        }
-    </style>
 </head>
+
 <body>
-    <div class="container">
-        <header>
-            <h1>URL Shortener Microservice</h1>
-            <p>A simple URL shortener built with Node.js and deployed on Netlify</p>
-        </header>
 
-        <main>
-            <section class="form-section">
-                <h2>Shorten a URL</h2>
-                <form action="/api/shorturl" method="POST" class="url-form">
-                    <div class="input-group">
-                        <input 
-                            type="url" 
-                            name="url" 
-                            placeholder="Enter a URL to shorten (e.g., https://example.com)"
-                            required
-                            class="url-input"
-                        >
-                        <button type="submit" class="submit-btn">Shorten URL</button>
-                    </div>
-                </form>
-            </section>
+  <!-- display a few instruction, following a header and containers for self-answered questions -->
+  <main>
+    <h1>
+      URL Shortener Microservice
+    </h1>
 
-            <section class="info-section">
-                <h3>How it works:</h3>
-                <ol>
-                    <li>Enter a valid URL in the format <code>https://example.com</code></li>
-                    <li>Click "Shorten URL" to get your shortened URL</li>
-                    <li>Use the shortened URL to redirect to the original URL</li>
-                </ol>
-            </section>
+    <!-- in each container detail a title and an unordered list of procedures, detailing the microservice -->
+    <div class="query">
+      <h2>How does this work</h2>
+      <!-- wrap keywords in span elements -->
+      <ul>
+        <li>
+          <span>
+            Post
+          </span>
+          a
+          <span>
+            url
+          </span>
+          in the form
+        </li>
 
-            <section class="api-section">
-                <h3>API Usage:</h3>
-                <div class="api-example">
-                    <h4>POST /api/shorturl</h4>
-                    <p>Send a POST request with a URL in the body:</p>
-                    <pre><code>{
-  "url": "https://www.example.com"
-}</code></pre>
-                    <p>Response:</p>
-                    <pre><code>{
-  "original_url": "https://www.example.com",
-  "short_url": 1
-}</code></pre>
-                </div>
+        <li>
+          Get a
+          <span>
+            shortened url
+          </span>
+          back
+        </li>
 
-                <div class="api-example">
-                    <h4>GET /api/shorturl/[short_url]</h4>
-                    <p>Visit the shortened URL to redirect to the original:</p>
-                    <pre><code>GET /api/shorturl/1</code></pre>
-                    <p>This will redirect you to the original URL.</p>
-                </div>
-            </section>
-        </main>
-
-        <footer>
-            <p>Built for freeCodeCamp Backend Development Certification</p>
-        </footer>
+      </ul>
     </div>
 
-    <script>
-        // Enhanced form handling with better UX
-        document.querySelector('.url-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const form = e.target;
-            const formData = new FormData(form);
-            const submitBtn = form.querySelector('.submit-btn');
-            const originalText = submitBtn.textContent;
-            
-            // Show loading state
-            submitBtn.textContent = 'Shortening...';
-            submitBtn.disabled = true;
-            
-            try {
-                const response = await fetch('/api/shorturl', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams(formData)
-                });
-                
-                const result = await response.json();
-                
-                // Remove any existing result
-                const existingResult = document.querySelector('.result');
-                if (existingResult) {
-                    existingResult.remove();
-                }
-                
-                // Create result element
-                const resultDiv = document.createElement('div');
-                resultDiv.className = 'result';
-                
-                if (result.error) {
-                    resultDiv.innerHTML = `
-                        <div class="error">
-                            <h4>Error:</h4>
-                            <p>${result.error}</p>
-                        </div>
-                    `;
-                } else {
-                    const shortUrl = `${window.location.origin}/api/shorturl/${result.short_url}`;
-                    resultDiv.innerHTML = `
-                        <div class="success">
-                            <h4>Success!</h4>
-                            <p><strong>Original URL:</strong> ${result.original_url}</p>
-                            <p><strong>Short URL:</strong> <a href="${shortUrl}" target="_blank">${shortUrl}</a></p>
-                            <button onclick="copyToClipboard('${shortUrl}')" class="copy-btn">Copy Short URL</button>
-                        </div>
-                    `;
-                }
-                
-                // Insert result after form
-                form.parentNode.insertBefore(resultDiv, form.nextSibling);
-                
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred. Please try again.');
-            } finally {
-                // Reset button
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-        
-        // Copy to clipboard function
-        function copyToClipboard(text) {
-            navigator.clipboard.writeText(text).then(function() {
-                const copyBtn = event.target;
-                const originalText = copyBtn.textContent;
-                copyBtn.textContent = 'Copied!';
-                setTimeout(() => {
-                    copyBtn.textContent = originalText;
-                }, 2000);
-            });
-        }
-    </script>
+    <!-- include the form element eventually enabling the microservice
+      remember the following attributes:
+      - action for the form, detailing the path
+      - method for the form, detailing the header's method
+      - name for the input, allowing to access the value attribute through the body parser dependency
+      - type for the button, to trigger the post request
+
+    -->
+    <form action="/api/shorturl" method="post">
+      <input required type="text" name="url" value="https://freecodecamp.org">
+      <button type="submit">Shorten URL</button>
+    </form>
+
+    <div class="query">
+      <h2>What to do with it</h2>
+      <ul>
+
+        <li>
+          Copy the
+          <span>
+            shortened url
+          </span>
+        </li>
+
+        <li>
+          append
+          <span>it</span>
+          to the home path, as in
+        </li>
+
+        <code>
+            [project_url]/api/shorturl/<span>it</span>
+        </code>
+
+        <li>prepare to be amazed</li>
+
+      </ul>
+    </div>
+
+  </main>
+
+  <!-- no script this time 'round -->
+  <!-- <script src="script.js"></script> -->
 </body>
+
 </html>
