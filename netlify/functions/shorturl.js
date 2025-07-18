@@ -24,14 +24,20 @@ const connectToDatabase = async () => {
   }
 };
 
-// Mongoose Schema
+// --- SCHEMAS (URL Mapping + a New Counter) ---
+
 const urlMappingSchema = new mongoose.Schema({
   original_url: { type: String, required: true },
   short_url: { type: Number, required: true, unique: true },
 });
 
-const UrlMapping = mongoose.model("UrlMapping", urlMappingSchema);
+const counterSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  seq: { type: Number, default: 0 }
+});
 
+const UrlMapping = mongoose.model("UrlMapping", urlMappingSchema);
+const Counter = mongoose.model('Counter', counterSchema);
 
 // --- ROUTES ---
 
@@ -39,7 +45,7 @@ app.get("/", function(req, res) {
   res.sendFile(process.cwd() + "/views/index.html");
 });
 
-// --- API ENDPOINT #1: CREATE SHORT URL (FIXED COUNTER LOGIC) ---
+// --- API ENDPOINT #1: CREATE SHORT URL (With Atomic Counter) ---
 app.post("/api/shorturl", async function(req, res) {
   const originalUrl = req.body.url;
 
@@ -61,14 +67,20 @@ app.post("/api/shorturl", async function(req, res) {
         short_url: mapping.short_url,
       });
     } else {
-      // **THE FIX IS HERE:** Instead of counting documents, find the highest
-      // existing short_url and add 1. This is much more robust.
-      const lastUrl = await UrlMapping.findOne().sort({ short_url: -1 });
-      const newShortUrl = lastUrl ? lastUrl.short_url + 1 : 1;
+      // **THE DEFINITIVE FIX IS HERE:**
+      // Use the atomic counter to get the next sequence number.
+      // `findOneAndUpdate` with `$inc` is an atomic operation.
+      // `upsert: true` creates the counter if it doesn't exist.
+      // `new: true` returns the updated document.
+      const counter = await Counter.findByIdAndUpdate(
+        { _id: 'url_count' },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true }
+      );
 
       mapping = new UrlMapping({
         original_url: originalUrl,
-        short_url: newShortUrl,
+        short_url: counter.seq,
       });
 
       await mapping.save();
@@ -78,11 +90,12 @@ app.post("/api/shorturl", async function(req, res) {
       });
     }
   } catch (err) {
+    // This will catch DNS errors and other unexpected errors
     return res.json({ error: 'invalid url' });
   }
 });
 
-// --- API ENDPOINT #2: REDIRECT (This part was already correct) ---
+// --- API ENDPOINT #2: REDIRECT (This handler is correct) ---
 app.get("/api/shorturl/:shortUrl", async function(req, res) {
   try {
     const shortUrlParam = req.params.shortUrl;
