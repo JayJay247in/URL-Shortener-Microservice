@@ -11,24 +11,20 @@ const serverless = require("serverless-http");
 
 const app = express();
 
-// Use built-in express body parser and cors
+// Middleware
 app.use(cors());
-app.use(express.json()); // For parsing application/json
-app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
-
-// Serve static files (if you have any)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use("/public", express.static(process.cwd() + "/public"));
 
-// Connect to the database when the function is invoked
+// Database connection function
 const connectToDatabase = async () => {
   if (mongoose.connection.readyState !== 1) {
-    // IMPORTANT: Make sure your environment variable in Netlify is MONGODB_URI
     await mongoose.connect(process.env.MONGODB_URI);
   }
 };
 
-// --- SCHEMA UPDATED ---
-// The schema now expects short_url to be a Number
+// Mongoose Schema
 const urlMappingSchema = new mongoose.Schema({
   original_url: { type: String, required: true },
   short_url: { type: Number, required: true, unique: true },
@@ -36,32 +32,27 @@ const urlMappingSchema = new mongoose.Schema({
 
 const UrlMapping = mongoose.model("UrlMapping", urlMappingSchema);
 
+
 // --- ROUTES ---
 
-// Main index page
 app.get("/", function(req, res) {
   res.sendFile(process.cwd() + "/views/index.html");
 });
 
-// --- API ENDPOINT #1: CREATE SHORT URL (FIXED) ---
+// --- API ENDPOINT #1: CREATE SHORT URL (FIXED COUNTER LOGIC) ---
 app.post("/api/shorturl", async function(req, res) {
   const originalUrl = req.body.url;
 
-  // Step 1: Validate URL format
-  // It must start with http:// or https://
   if (!/^https?:\/\//i.test(originalUrl)) {
-    // The test requires this EXACT error message.
     return res.json({ error: 'invalid url' });
   }
 
   try {
     const urlObject = new URL(originalUrl);
-    // Step 2: Validate hostname using DNS lookup
     await dns.lookup(urlObject.hostname);
 
     await connectToDatabase();
 
-    // Step 3: Check if URL already exists
     let mapping = await UrlMapping.findOne({ original_url: originalUrl });
 
     if (mapping) {
@@ -70,9 +61,10 @@ app.post("/api/shorturl", async function(req, res) {
         short_url: mapping.short_url,
       });
     } else {
-      // Step 4: Create a new short URL (as a number)
-      const urlCount = await UrlMapping.countDocuments({});
-      const newShortUrl = urlCount + 1;
+      // **THE FIX IS HERE:** Instead of counting documents, find the highest
+      // existing short_url and add 1. This is much more robust.
+      const lastUrl = await UrlMapping.findOne().sort({ short_url: -1 });
+      const newShortUrl = lastUrl ? lastUrl.short_url + 1 : 1;
 
       mapping = new UrlMapping({
         original_url: originalUrl,
@@ -86,17 +78,14 @@ app.post("/api/shorturl", async function(req, res) {
       });
     }
   } catch (err) {
-    // This will now catch DNS lookup errors
     return res.json({ error: 'invalid url' });
   }
 });
 
-
-// --- API ENDPOINT #2: REDIRECT (FIXED) ---
+// --- API ENDPOINT #2: REDIRECT (This part was already correct) ---
 app.get("/api/shorturl/:shortUrl", async function(req, res) {
   try {
     const shortUrlParam = req.params.shortUrl;
-    // Ensure the parameter is a valid number before querying
     if (!/^\d+$/.test(shortUrlParam)) {
        return res.json({ error: "Wrong format" });
     }
@@ -111,11 +100,9 @@ app.get("/api/shorturl/:shortUrl", async function(req, res) {
       res.json({ error: "No short URL found for the given input" });
     }
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
-
 
 // Export the handler for Netlify
 module.exports.handler = serverless(app);
