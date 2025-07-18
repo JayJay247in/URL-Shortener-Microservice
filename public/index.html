@@ -1,97 +1,59 @@
 <!DOCTYPE html>
+
 <html>
 
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-
   <title>URL Shortener</title>
-  <meta name="description" content="Create the third back-end project for the _API and microservices_ certification @freecodecamp." />
-
-  <link rel="stylesheet" href="style.css" />
-  <!-- <link rel="icon" href="tab_icon.png"> -->
-
+  <link rel="shortcut icon" href="https://cdn.hyperdev.com/us-east-1%3A52a203ff-088b-420f-81be-45bf559d01b1%2Ffavicon.ico"
+    type="image/x-icon" />
+  <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet" type="text/css">
+  <link href="./style.css" rel="stylesheet" type="text/css">
 </head>
 
 <body>
+  <div class="container">
+    <h2>URL Shortener Microservice</h2>
+    <h3>User Story: </h3>
+    <ol>
+      <li>I can POST a URL to
+        <code>[project_url]/api/shorturl/new</code> and I will receive a shortened URL in the JSON response.
+        <br>Example :
+        <code>{"original_url":"www.google.com","short_url":1}</code>
+      </li>
+      <li>If I pass an invalid URL that doesn't follow the
+        <code>http(s)://www.example.com(/more/routes)</code> format, the JSON response will contain an error like
+        <code>{"error":"invalid URL"}</code>
+        <br> HINT: to be sure that the submitted url points to a valid site you can use the function
+        <code>dns.lookup(host, cb)</code> from the
+        <code>dns</code> core module.</li>
+      <li>When I visit the shortened URL, it will redirect me to my original link.</li>
+    </ol>
 
-  <!-- display a few instruction, following a header and containers for self-answered questions -->
-  <main>
-    <h1>
-      URL Shortener Microservice
-    </h1>
-
-    <!-- in each container detail a title and an unordered list of procedures, detailing the microservice -->
-    <div class="query">
-      <h2>How does this work</h2>
-      <!-- wrap keywords in span elements -->
-      <ul>
-        <li>
-          <span>
-            Post
-          </span>
-          a
-          <span>
-            url
-          </span>
-          in the form
-        </li>
-
-        <li>
-          Get a
-          <span>
-            shortened url
-          </span>
-          back
-        </li>
-
-      </ul>
-    </div>
-
-    <!-- include the form element eventually enabling the microservice
-      remember the following attributes:
-      - action for the form, detailing the path
-      - method for the form, detailing the header's method
-      - name for the input, allowing to access the value attribute through the body parser dependency
-      - type for the button, to trigger the post request
-
-    -->
-    <form action="/api/shorturl" method="post">
-      <input required type="text" name="url" value="https://freecodecamp.org">
-      <button type="submit">Shorten URL</button>
+    <h3>Short URL Creation </h3>
+    <p>
+      example:
+      <code>POST [project_url]/api/shorturl/new</code> -
+      <code>https://www.google.com</code>
+    </p>
+    <form action="api/shorturl/new" method="POST">
+      <label for="url_input">URL to be shortened</label>
+      <input id="url_input" type="text" name="url" value="https://www.freecodecamp.com">
+      <input type="submit" value="POST URL">
     </form>
+    <h3>Example Usage:</h3>
+    <a href="/api/shorturl/xarLd">
+      [this_project_url]/api/shorturl/xarLd
+    </a>
 
-    <div class="query">
-      <h2>What to do with it</h2>
-      <ul>
-
-        <li>
-          Copy the
-          <span>
-            shortened url
-          </span>
-        </li>
-
-        <li>
-          append
-          <span>it</span>
-          to the home path, as in
-        </li>
-
-        <code>
-            [project_url]/api/shorturl/<span>it</span>
-        </code>
-
-        <li>prepare to be amazed</li>
-
-      </ul>
-    </div>
-
-  </main>
-
-  <!-- no script this time 'round -->
-  <!-- <script src="script.js"></script> -->
+    <h3>Will Redirect to:</h3>
+    <p>https://www.freecodecamp.com</p>
+  </div>
+  <div class="footer">
+    <p>
+      by
+      <a href="http://www.freecodecamp.com">freeCodeCamp</a>
+    </p>
+  </div>
 </body>
 
 </html>
